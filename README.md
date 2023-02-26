@@ -21,7 +21,7 @@ A delay strategy is required and performs the actual delaying between executions
 - In the synchronous case: `ThreadSleep {}` can be used, blocking the current thread until the next try should take place.
 - In the asynchronous case: `TokioSleep {}` can be used when using the Tokio runtime.
 
-Other delay strategies can be implemented to for example support async_std or other asynchronous runtimes.
+Other delay strategies may be implemented to support async_std or other asynchronous runtimes.
 
 ## Synchronous example
 
@@ -41,7 +41,7 @@ let final_outcome = retry(
     },
     ThreadSleep {},
     move || some_fallible_operation(),
-).await;
+);
 ```
 
 ## Asynchronous example
