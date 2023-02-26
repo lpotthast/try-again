@@ -1,0 +1,14 @@
+[package]
+name = "try-again"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = ["sync", "async", "async-tokio"]
+sync = []
+async = []
+async-tokio = ["async", "dep:tokio"]
+
+[dependencies]
+tokio = { version = "1", features = ["full"], optional = true }
+tracing = "0.1"
