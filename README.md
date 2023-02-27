@@ -25,7 +25,7 @@ Other delay strategies may be implemented to support async_std or other asynchro
 
 ## Synchronous example
 
-```Rust
+```rust
 use try_again::{retry, Delay, Retry, ThreadSleep};
 
 fn some_fallible_operation() -> Result<(), ()> {
@@ -46,7 +46,7 @@ let final_outcome = retry(
 
 ## Asynchronous example
 
-```Rust
+```rust
 use try_again::{retry_async, Delay, Retry, TokioSleep};
 
 async fn some_fallible_operation() -> Result<(), ()> {
