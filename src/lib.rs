@@ -138,11 +138,10 @@ pub async fn retry_async<D, RetryStrat, DelayFut, DelayStrat, Out, Fut, Op>(
 where
     D: Debug + Clone,
     RetryStrat: RetryStrategy<D> + Debug,
-    DelayFut: Future<Output = ()> + Send,
+    DelayFut: Future<Output = ()>,
     DelayStrat: DelayStrategy<D, Out = DelayFut> + Debug,
     Out: NeedsRetry + Debug,
-    Fut: Future<Output = Out> + Send,
-    Fut::Output: Send,
+    Fut: Future<Output = Out>,
     Op: Fn() -> Fut,
 {
     let mut tries: usize = 1;
