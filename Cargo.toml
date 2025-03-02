@@ -1,8 +1,8 @@
 [package]
 name = "try-again"
-version = "0.1.1"
-edition = "2021"
-rust-version = "1.56"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.85"
 authors = ["Lukas Potthast <privat@lukas-potthast.de>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -10,15 +10,18 @@ repository = "https://github.com/lpotthast/try-again"
 description = """
 Retry synchronous and asynchronous operations.
 """
-categories = ["asynchronous"]
-keywords = ["retry", "async", "retry-async"]
+categories = ["rust-patterns", "asynchronous"]
+keywords = ["try", "again", "retry", "retry-async"]
 
 [features]
-default = ["sync", "async", "async-tokio"]
-sync = []
+default = ["async", "async-tokio"]
 async = []
 async-tokio = ["async", "dep:tokio"]
 
 [dependencies]
-tokio = { version = "1", features = ["full"], optional = true }
+tokio = { version = "1", features = ["time"], optional = true }
 tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }
+assertr = "0.1.0"
