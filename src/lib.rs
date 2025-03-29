@@ -89,12 +89,16 @@ mod duration;
 mod fallible;
 mod tracked_iterator;
 
-#[cfg(feature = "async")]
-use crate::delay_executor::AsyncDelayExecutor;
-use crate::delay_executor::{DelayExecutor, ThreadSleep, TokioSleep};
-use crate::delay_strategy::DelayStrategy;
 use std::fmt::Debug;
 use std::marker::PhantomData;
+
+#[cfg(feature = "async")]
+use crate::delay_executor::AsyncDelayExecutor;
+use crate::delay_executor::DelayExecutor;
+use crate::delay_executor::ThreadSleep;
+#[cfg(feature = "async-tokio")]
+use crate::delay_executor::TokioSleep;
+use crate::delay_strategy::DelayStrategy;
 
 pub use duration::IntoStdDuration;
 pub use duration::StdDuration;
@@ -191,6 +195,7 @@ where
     AsyncNeedsDelayStrategy { operation }
 }
 
+#[cfg(feature = "async")]
 pub struct AsyncNeedsDelayStrategy<Out, Op>
 where
     Out: NeedsRetry + Debug,
@@ -199,6 +204,7 @@ where
     operation: Op,
 }
 
+#[cfg(feature = "async")]
 impl<Out, Op> AsyncNeedsDelayStrategy<Out, Op>
 where
     Out: NeedsRetry + Debug,
