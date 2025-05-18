@@ -72,7 +72,7 @@
 //!
 //! - `retry` puts the current thread to sleep between retries (through the provided `ThreadSleep` executor).
 //! - `retry_async` instructs the tokio runtime to sleep between retries (through the provided `TokioSleep` executor,
-//!    requires the `async-tokio` feature (enabled by default)).
+//!   requires the `async-tokio` feature (enabled by default)).
 //!
 //! The `retry_with_options` and `retry_async_with_options` functions can be used to overwrite the standard behavior
 //! with any executor type implementing the `DelayExecutor` trait.

@@ -1,6 +1,6 @@
 [package]
 name = "try-again"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Lukas Potthast <privat@lukas-potthast.de>"]
@@ -24,4 +24,4 @@ tracing = "0.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
-assertr = "0.1.0"
+assertr = "0.3.1"

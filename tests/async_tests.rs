@@ -1,9 +1,19 @@
 mod retry_async {
     use assertr::assert_that;
     use assertr::prelude::*;
+    use std::rc::Rc;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicI32, Ordering};
     use try_again::{IntoStdDuration, delay, retry_async};
+
+    #[tokio::test]
+    async fn accepts_function_pointer() {
+        async fn test() -> Result<(), ()> {
+            Ok(())
+        }
+        let out = retry_async(test).delayed_by(delay::None.take(0)).await;
+        assert_that(out).is_ok().is_equal_to(());
+    }
 
     #[tokio::test]
     async fn accepts_closure() {
@@ -13,12 +23,48 @@ mod retry_async {
     }
 
     #[tokio::test]
-    async fn accepts_function_pointer() {
-        async fn test() -> Result<(), ()> {
+    async fn accepts_closure_capturing_owned_value() {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        struct Data;
+
+        let data = Data;
+        let out: Result<Data, ()> = retry_async(move || {
+            let data = data.clone();
+            async move { Ok(data) }
+        })
+        .delayed_by(delay::None.take(0))
+        .await;
+        assert_that(out).is_ok().is_equal_to(Data);
+    }
+
+    #[tokio::test]
+    async fn accepts_closure_capturing_reference() {
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        struct Data;
+
+        async fn foo(_data: &Data) -> Result<(), ()> {
             Ok(())
         }
-        let out = retry_async(test).delayed_by(delay::None.take(0)).await;
+
+        let owned = Data;
+        let reference = &owned;
+        let out: Result<(), ()> = retry_async(|| foo(reference))
+            .delayed_by(delay::None.take(0))
+            .await;
         assert_that(out).is_ok().is_equal_to(());
+    }
+
+    #[tokio::test]
+    async fn accepts_closure_capturing_non_send_data() {
+        async fn foo(data: Rc<i32>) -> Result<i32, ()> {
+            Ok(*data)
+        }
+
+        let data = Rc::new(0);
+        let out: Result<i32, ()> = retry_async(|| foo(data.clone()))
+            .delayed_by(delay::None.take(0))
+            .await;
+        assert_that(out).is_ok().is_equal_to(0);
     }
 
     #[tokio::test]
