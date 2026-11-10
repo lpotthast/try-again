@@ -1,2 +1,5 @@
 target/
 .DS_Store
+.idea/
+# The coverage report of `just coverage`.
+lcov.info

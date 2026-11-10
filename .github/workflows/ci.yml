@@ -1,0 +1,227 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Exercise the full pipeline weekly ("At 05:30 on Monday.").
+    - cron: "30 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  # The jobs run recipes of the Justfile, so that CI and local runs share their commands. Only
+  # `semver-checks` uses an action, which runs the same check as the recipe of that name.
+  fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-sort
+      - run: just fmt-check
+
+  # Each feature on its own, without default features, and all features together: Cargo unifies
+  # features within one invocation, so code that silently relies on `tokio` is only visible when
+  # that feature is off. cargo-hack derives the feature sets from Cargo.toml.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-hack
+      - uses: Swatinem/rust-cache@v2
+      - run: just clippy
+      - run: just test
+      - run: just package
+
+  # The clocks and timers of macOS and Windows differ from those of Linux.
+  test-os:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    defaults:
+      run:
+        # just runs its recipes with `sh`, which Git Bash brings along on Windows.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-hack
+      - uses: Swatinem/rust-cache@v2
+      - run: just test
+
+  # docs.rs builds with all features, nightly and `--cfg docsrs`, which labels feature-gated items.
+  # The doctests run here too, because only nightly checks the error codes of `compile_fail`.
+  docs-rs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - uses: Swatinem/rust-cache@v2
+      - run: just docs-rs
+
+  # Everything that does not put a thread to sleep builds for the browser.
+  wasm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - uses: Swatinem/rust-cache@v2
+      - run: just check-wasm
+
+  # Without `std`, the crate builds for targets without an operating system.
+  no-std:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf
+          components: clippy
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - uses: Swatinem/rust-cache@v2
+      - run: just check-no-std
+
+  # The library supports Rust 1.85.0, also on a microcontroller and in the browser. Its tests do
+  # not: the dev-dependencies need a newer Rust.
+  msrv:
+    name: MSRV (Rust 1.85.0)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.85.0
+        with:
+          targets: thumbv7em-none-eabihf,wasm32-unknown-unknown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - uses: Swatinem/rust-cache@v2
+      - run: just check-msrv
+
+  # The test coverage, for the badge in the README. Uploading needs the secret `CODECOV_TOKEN`.
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-llvm-cov
+      - uses: Swatinem/rust-cache@v2
+      - run: just coverage
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+  # The lower bounds of the direct dependencies must build and pass the tests, and build for the
+  # browser.
+  minimal-versions:
+    name: Minimal dependency versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-hack,cargo-minimal-versions
+      - uses: Swatinem/rust-cache@v2
+      - run: just minimal-versions
+
+  # Every recipe builds with the tracked `Cargo.lock`, so that only this job sees the releases of
+  # the dependencies since then: `cargo update` picks the newest that support the MSRV, as it does
+  # for a new user of the crate. It runs weekly and on demand, and not on a push, which a release
+  # of a dependency must not fail.
+  latest-deps:
+    name: Latest dependency versions
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.85.0
+        with:
+          targets: thumbv7em-none-eabihf,wasm32-unknown-unknown
+      # Installed last, which makes it the default toolchain.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: thumbv7em-none-eabihf,wasm32-unknown-unknown
+          components: clippy
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-hack
+      - run: cargo update
+      - run: just test
+      - run: just check-wasm
+      - run: just check-no-std
+      - run: just check-msrv
+
+  semver-checks:
+    name: Semver checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: obi1kenobi/cargo-semver-checks-action@v2
+
+  audit:
+    name: RustSec audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-audit
+      - run: just audit

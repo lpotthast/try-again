@@ -1,27 +1,69 @@
 [package]
 name = "try-again"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Lukas Potthast <privat@lukas-potthast.de>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/lpotthast/try-again"
-description = """
-Retry synchronous and asynchronous operations.
-"""
-categories = ["rust-patterns", "asynchronous"]
-keywords = ["try", "again", "retry", "retry-async"]
+description = "Retry blocking and async operations with exponential backoff, jitter, per-try timeouts and deadlines."
+categories = ["rust-patterns", "asynchronous", "no-std", "no-std::no-alloc", "wasm"]
+keywords = ["retry", "timeout", "exponential-backoff", "deadline", "async"]
+include = ["/src/**", "/tests/**", "/README.md", "/CHANGELOG.md", "/LICENSE-*"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default = ["async", "async-tokio"]
-async = []
-async-tokio = ["async", "dep:tokio"]
+default = ["std", "tokio"]
+# Collections as delays: `Vec`s, `VecDeque`s and boxed delays that state their limit.
+alloc = []
+# `sleep::AsyncIoSleep`, the timer of smol and other executors built on async-io.
+async-io = ["std", "dep:async-io"]
+# `sleep::EmbassySleep`, embassy's timer, also without `std`.
+embassy-time = ["dep:embassy-time"]
+# `delay::random_factor`, random factors for jitter.
+fastrand = ["std", "dep:fastrand"]
+# `sleep::FuturesTimerSleep`, a timer for any executor, and for the browser.
+futures-timer = ["std", "dep:futures-timer"]
+# `delay::retry_after`, which reads the `Retry-After` header of an HTTP response.
+retry-after = ["std", "dep:httpdate"]
+# `ThreadSleep`, the default sleep of blocking retries, and `retry_async_lending`.
+std = ["alloc"]
+# `sleep::TokioSleep`, the default sleep of async retries.
+tokio = ["std", "dep:tokio"]
 
 [dependencies]
-tokio = { version = "1", features = ["time"], optional = true }
-tracing = "0.1"
+async-io = { version = "2", default-features = false, optional = true }
+embassy-time = { version = "0.5", default-features = false, optional = true }
+fastrand = { version = "2", default-features = false, features = ["std"], optional = true }
+# 3.0.0 does not compile for the browser.
+futures-timer = { version = "3.0.1", default-features = false, optional = true }
+httpdate = { version = "1", default-features = false, optional = true }
+tokio = { version = "1.7", default-features = false, features = ["time"], optional = true }
+
+# In the browser, futures-timer needs its `wasm-bindgen` feature, because a thread cannot sleep
+# there, and fastrand its `js` feature, which seeds it from the browser's `crypto.getRandomValues`.
+# Without it, fastrand uses the same seed in every browser, and clients would retry in lockstep.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+fastrand = { version = "2", default-features = false, features = ["js"], optional = true }
+futures-timer = { version = "3.0.1", default-features = false, features = ["wasm-bindgen"], optional = true }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt"] }
-assertr = "0.3.1"
+assertr = { version = "0.9.1", default-features = false }
+# A driver for embassy's timers on the host, for the tests of `EmbassySleep`.
+embassy-time = { version = "0.5", default-features = false, features = ["std", "generic-queue-8"] }
+# 1.7 is the oldest tokio whose paused clock fires timers as the tests expect. The library's own
+# bound matches, so that minimal versions resolve to one tokio.
+tokio = { version = "1.7", default-features = false, features = ["macros", "rt", "test-util"] }
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+unwrap_used = "deny"
